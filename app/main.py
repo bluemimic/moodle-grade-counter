@@ -20,6 +20,9 @@ def get_all_classes() -> list:
     if not os.path.exists(DEFAULT_CLASSES_DIR):
         raise FileNotFoundError("Classes directory not found. Consider creating a /classes directory in the root directory of the program.")
     
+    if not os.listdir(DEFAULT_CLASSES_DIR):
+        raise FileNotFoundError("No class files found. Consider creating a file with the class name in the /classes directory in the root directory of the program.")
+    
     for file in os.listdir(DEFAULT_CLASSES_DIR):
         if file.endswith(".txt"):
             classes.append(file[:-4])
@@ -49,7 +52,10 @@ def retrieve_student_names(class_name: str) -> list:
     
     if not os.path.exists(DEFAULT_CLASSES_DIR + "/" + class_name + '.txt'):
         raise FileNotFoundError(f"Class file {class_name}.txt not found. Consider creating a file with the class name in the /classes directory in the root directory of the program.")
-        
+    
+    if not os.listdir(DEFAULT_CLASSES_DIR):
+        raise FileNotFoundError("No class files found in the /classes directory. Consider creating a file with the class name in the /classes directory in the root directory of the program.")
+    
     with open(DEFAULT_CLASSES_DIR + "/" + class_name + '.txt', newline='', encoding='utf-8') as file:
         for line in file:
             names.append(line.strip())
@@ -61,6 +67,9 @@ def fetch_all_grade_files() -> list:
     
     if not os.path.exists(DEFAULT_GRADES_DIR):
         raise FileNotFoundError("Grades directory not found. Consider creating a /grades directory in the root directory of the program.")
+    
+    if not os.listdir(DEFAULT_GRADES_DIR):
+        raise FileNotFoundError("No grade files found.")
     
     for file in os.listdir(DEFAULT_GRADES_DIR):
         if file.endswith(".csv"):
@@ -76,6 +85,10 @@ def evaluate_grades(grade_file: str, names: list) -> dict:
     
     if not os.path.exists(DEFAULT_GRADES_DIR + "/" + grade_file):
         raise FileNotFoundError(f"Grade file {grade_file} not found. Consider creating a file with the grade name in the /grades directory in the root directory of the program.")
+    
+    print(os.listdir(DEFAULT_GRADES_DIR))
+    if not os.listdir(DEFAULT_GRADES_DIR):
+        raise FileNotFoundError("No grade files found in the /grades directory.")
     
     with open(DEFAULT_GRADES_DIR + "/" + grade_file, newline='', encoding='utf-8') as csvfile:
         reader = csv.reader(csvfile)
