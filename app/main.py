@@ -82,6 +82,7 @@ def round_grade(grade: float) -> int:
 
 def evaluate_grades(grade_file: str, names: list) -> dict:
     eval_grades = dict.fromkeys(names, 0.0)
+    is_finished = dict.fromkeys(names, False)
     
     if not os.path.exists(DEFAULT_GRADES_DIR + "/" + grade_file):
         raise FileNotFoundError(f"Grade file {grade_file} not found. Consider creating a file with the grade name in the /grades directory in the root directory of the program.")
@@ -108,18 +109,22 @@ def evaluate_grades(grade_file: str, names: list) -> dict:
             except KeyError:
                 raise ValueError(f"Student {name} not found in the class file. Perhaps you've chosen the wrong class.")
             
-            if not finished and eval_grades[name] != 0.0:
+            if not finished and is_finished[name]:
                 continue
             
             if finished:
                 eval_grades[name] = round_grade(float(row[7]))
+                is_finished[name] = True
                 
             if in_progress:
+                grade = 0.0
+                
                 for i in range(7, len(row)):
                     if row[i] != '-':
-                        eval_grades[name] += float(row[i])
+                        grade += float(row[i])
                     
-                eval_grades[name] = round_grade(eval_grades[name])
+                if grade > eval_grades[name]:
+                    eval_grades[name] = round_grade(grade)
 
     return eval_grades
 
