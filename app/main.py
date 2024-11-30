@@ -1,10 +1,18 @@
 import csv
 import os
+import re
+import statistics
+from datetime import datetime
+
+import pyautogui
 import pyuca
 
 
 DEFAULT_GRADES_DIR = "grades"
 DEFAULT_CLASSES_DIR = "classes"
+
+pyautogui.PAUSE = 0.2
+pyautogui.FAILSAFE = True
 
 
 def get_valid_integer() -> int:
@@ -168,8 +176,8 @@ def evaluate_grades(grade_file: str, names: list) -> dict:
     Returns:
         dict: A dictionary with student names as keys and their evaluated grades as values.
     """
-    eval_grades = dict.fromkeys(names, 0.0)
-    is_finished = dict.fromkeys(names, False)
+    evaluated_grades = dict.fromkeys(names, 0)
+    submission_status = dict.fromkeys(names, False)
 
     grade_file_path = os.path.join(DEFAULT_GRADES_DIR, grade_file)
     check_path_exists(
@@ -177,47 +185,132 @@ def evaluate_grades(grade_file: str, names: list) -> dict:
         f"Grade file {grade_file} not found. Consider creating a file with the grade name in the /grades directory in the root directory of the program.",
     )
 
-    with open(grade_file_path, newline="", encoding="utf-8") as csvfile:
-        reader = csv.reader(csvfile)
-
-        next(reader)
+    with open(grade_file_path, newline="", encoding="utf-8-sig") as csvfile:
+        reader = csv.DictReader(csvfile)
+        grade_pattern = re.compile(r"Grade/\d+\.\d+")
 
         for row in reader:
-            if row[0] == "Overall average":
+            if row["Surname"] == "Overall average":
                 break
 
-            name = f"{row[0]} {row[1]}"
-            finished = row[3] == "Finished"
-            in_progress = row[3] == "In progress"
+            student_name = f"{row['Surname']} {row['First name']}"
+            has_finished = row["State"] == "Finished"
+            in_progress = row["State"] == "In progress"
 
             try:
-                eval_grades[name]
+                evaluated_grades[student_name]
+
             except KeyError as exc:
                 raise ValueError(
-                    f"Student {name} not found in the class file. Perhaps you've chosen the wrong class."
+                    f"Student {student_name} not found in the class file. Perhaps you've chosen the wrong class."
                 ) from exc
 
-            if not finished and is_finished[name]:
+            if not has_finished and submission_status[student_name]:
                 continue
 
-            if finished:
-                eval_grades[name] = round_grade(float(row[7]))
-                is_finished[name] = True
+            if has_finished:
+                grade_key = next((key for key in row if grade_pattern.match(key)), None)
+                evaluated_grades[student_name] = round_grade(float(row[grade_key]))
+                submission_status[student_name] = True
 
             if in_progress:
-                grade = 0.0
+                grade = 0
 
-                for i in range(7, len(row)):
-                    if row[i] != "-":
-                        grade += float(row[i])
+                for key in row:
+                    if key.startswith("Q. ") and row[key] != "-":
+                        grade += float(row[key])
 
-                if grade > eval_grades[name]:
-                    eval_grades[name] = round_grade(grade)
+                if grade > evaluated_grades[student_name]:
+                    evaluated_grades[student_name] = round_grade(grade)
 
-    return eval_grades
+    return evaluated_grades
 
 
-def show_grades_summary(grades: dict, grade_file: str, school_class: str) -> None:
+def get_task_date(grade_file: str) -> str:
+    """
+    Extract the task date from the grade file.
+
+    Args:
+        grade_file (str): The name of the grade file.
+
+    Returns:
+        str: The task date in a formatted string.
+    """
+    grade_file_path = os.path.join(DEFAULT_GRADES_DIR, grade_file)
+    check_path_exists(
+        grade_file_path,
+        f"Grade file {grade_file} not found.",
+    )
+
+    with open(grade_file_path, newline="", encoding="utf-8-sig") as csvfile:
+        reader = csv.DictReader(csvfile)
+        dates = []
+
+        for row in reader:
+            if row["Surname"] == "Overall average":
+                break
+
+            if row["State"] == "Finished" or row["State"] == "In progress":
+                try:
+                    date = datetime.strptime(row["Started on"], "%d %B %Y %I:%M %p")
+                    dates.append(date)
+                except ValueError:
+                    continue
+
+        if dates:
+            return min(dates).strftime("%d %B %Y")
+
+        else:
+            return "No valid dates found"
+
+
+def input_grades_to_journal(grades: dict) -> None:
+    """
+    Input grades into the journaling system using pyautogui.
+
+    Args:
+        grades (dict): A dictionary with student names as keys and their grades as values.
+    """
+    print("\n> Starting to input grades into the journaling system...")
+
+    pyautogui.hotkey("alt", "tab")
+
+    for grade in grades.values():
+        pyautogui.typewrite(str(grade))
+        pyautogui.press("tab")
+        
+    print("> Finished inputting grades into the journaling system.")
+
+
+def prompt_grade_input_or_continue(grades: dict) -> None:
+    """
+    Ask the user if they want to input grades into the journaling system or to continue.
+
+    Args:
+        grades (dict): A dictionary with student names as keys and their grades as values.
+    """
+    while True:
+        response = (
+            input(
+                "\nDo you want to input these grades into the journaling system (1) or to continue (Enter)? "
+            )
+            .strip()
+            .lower()
+        )
+        if response == "1":
+            input_grades_to_journal(grades)
+            break
+
+        elif response == "":
+            break
+
+        else:
+            print("Please enter '1' or 'Enter'.")
+
+
+def show_grades_summary(
+    grades: dict, grade_file: str, school_class: str, task_date: str
+) -> None:
     """
     Display a summary of grades for a given grade file and class.
 
@@ -225,20 +318,28 @@ def show_grades_summary(grades: dict, grade_file: str, school_class: str) -> Non
         grades (dict): A dictionary with student names as keys and their grades as values.
         grade_file (str): The name of the grade file.
         school_class (str): The name of the class.
+        task_date (str): The date of the task.
     """
-    print(f"{'#' * 10} {grade_file} {'#' * 10}")
-    print(f"Class: {school_class}\n")
+    task_name = grade_file.split("-")[2]
+
+    print(f"\n{'#' * 10} {grade_file} {'#' * 10}")
+    print(f"Class: {school_class}")
+    print(f"Task: {task_name}")
+    print(f"Date: {task_date}\n")
+
+    grade_values = [grade for grade in grades.values() if grade != 0]
+    average_grade = statistics.mean(grade_values)
+    median_grade = statistics.median(grade_values)
+    mode_grade = statistics.mode(grade_values)
+    std_dev_grade = statistics.stdev(grade_values)
 
     for name, grade in grades.items():
         print(f"{grade: <3} {name}")
 
-
-def ask_to_continue() -> None:
-    """
-    Prompt the user to press enter to continue.
-    """
-    print("\n> Press enter to continue...")
-    input()
+    print(f"\nAverage Grade: {average_grade:.2f}")
+    print(f"Median Grade: {median_grade:.2f}")
+    print(f"Mode Grade: {mode_grade:.2f}")
+    print(f"Standard Deviation: {std_dev_grade:.2f}")
 
 
 if __name__ == "__main__":
@@ -249,7 +350,8 @@ if __name__ == "__main__":
 
     for grade_file in fetch_all_grade_files():
         grades = evaluate_grades(grade_file, names)
+        date = get_task_date(grade_file)
 
-        show_grades_summary(grades, grade_file, school_class)
+        show_grades_summary(grades, grade_file, school_class, date)
 
-        ask_to_continue()
+        prompt_grade_input_or_continue(grades)
