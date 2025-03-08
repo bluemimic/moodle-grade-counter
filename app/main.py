@@ -11,7 +11,7 @@ import pyuca
 DEFAULT_GRADES_DIR = "grades"
 DEFAULT_CLASSES_DIR = "classes"
 
-pyautogui.PAUSE = 0.2
+pyautogui.PAUSE = 0.1
 pyautogui.FAILSAFE = True
 
 
@@ -264,7 +264,7 @@ def get_task_date(grade_file: str) -> str:
             return "No valid dates found"
 
 
-def input_grades_to_journal(grades: dict) -> None:
+def input_grades_to_journal(grades: dict, is_gepd: bool) -> None:
     """
     Input grades into the journaling system using pyautogui.
 
@@ -276,7 +276,8 @@ def input_grades_to_journal(grades: dict) -> None:
     pyautogui.hotkey("alt", "tab")
 
     for grade in grades.values():
-        pyautogui.typewrite(str(grade))
+        to_write = str(grade) + "%" if is_gepd else str(grade)
+        pyautogui.typewrite(to_write)
         pyautogui.press("tab")
         
     print("> Finished inputting grades into the journaling system.")
@@ -298,7 +299,8 @@ def prompt_grade_input_or_continue(grades: dict) -> None:
             .lower()
         )
         if response == "1":
-            input_grades_to_journal(grades)
+            is_gepd = input("Is this a GEPD? (1/0): ").strip().lower() == "1"
+            input_grades_to_journal(grades, is_gepd)
             break
 
         elif response == "":
