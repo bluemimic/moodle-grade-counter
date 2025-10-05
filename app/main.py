@@ -165,18 +165,21 @@ def round_grade(grade: float) -> int:
     return int(round(grade, 0))
 
 
-def evaluate_grades(grade_file: str, names: list) -> dict:
+def evaluate_grades(grade_file: str, names: list, config: dict | None = None) -> dict:
     """
     Evaluate the grades of students from a given grade file.
 
     Args:
         grade_file (str): The name of the grade file.
         names (list): A list of student names.
+        config (dict, optional): Configuration dictionary. Defaults to None.
 
     Returns:
         dict: A dictionary with student names as keys and their evaluated grades as values.
     """
-    evaluated_grades = dict.fromkeys(names, 0)
+    write_only_preset = config.get("writeOnlyPresetInGradeFile", False) if config else False
+    
+    evaluated_grades = dict.fromkeys(names, -1 if write_only_preset else 0)
     submission_status = dict.fromkeys(names, False)
 
     grade_file_path = os.path.join(DEFAULT_GRADES_DIR, grade_file)
@@ -264,31 +267,40 @@ def get_task_date(grade_file: str) -> str:
             return "No valid dates found"
 
 
-def input_grades_to_journal(grades: dict, is_gepd: bool) -> None:
+def input_grades_to_journal(grades: dict, is_gepd: bool, config: dict | None = None) -> None:
     """
     Input grades into the journaling system using pyautogui.
 
     Args:
         grades (dict): A dictionary with student names as keys and their grades as values.
+        is_gepd (bool): Whether the grades are GEPD (True) or not (False).
+        config (dict, optional): Configuration dictionary. Defaults to None.
     """
     print("\n> Starting to input grades into the journaling system...")
 
     pyautogui.hotkey("alt", "tab")
 
+    end_symbol = config.get("gepdEndSymbol", "%") if config else "%"
+    
     for grade in grades.values():
-        to_write = str(grade) + "%" if is_gepd else str(grade)
+        if config and config.get("writeOnlyPresetInGradeFile", False) and grade == -1:
+            pyautogui.press("tab")
+            continue
+        
+        to_write = str(grade) + end_symbol if is_gepd else str(grade)
         pyautogui.typewrite(to_write)
         pyautogui.press("tab")
         
     print("> Finished inputting grades into the journaling system.")
 
 
-def prompt_grade_input_or_continue(grades: dict) -> None:
+def prompt_grade_input_or_continue(grades: dict, config: dict | None = None) -> None:
     """
     Ask the user if they want to input grades into the journaling system or to continue.
 
     Args:
         grades (dict): A dictionary with student names as keys and their grades as values.
+        config (dict, optional): Configuration dictionary. Defaults to None.
     """
     while True:
         response = (
@@ -300,7 +312,7 @@ def prompt_grade_input_or_continue(grades: dict) -> None:
         )
         if response == "1":
             is_gepd = input("Is this a GEPD? (1/0): ").strip().lower() == "1"
-            input_grades_to_journal(grades, is_gepd)
+            input_grades_to_journal(grades, is_gepd, config)
             break
 
         elif response == "":
@@ -343,17 +355,37 @@ def show_grades_summary(
     print(f"Mode Grade: {mode_grade:.2f}")
     print(f"Standard Deviation: {std_dev_grade:.2f}")
 
+def read_config() -> dict:
+    """
+    Read the configuration from the config.json file.
+
+    Returns:
+        dict: The configuration dictionary.
+    """
+    import json
+
+    config_path = "config.json"
+    check_path_exists(
+        config_path,
+        "Configuration file not found. Consider creating a config.json file in the root directory of the program.",
+    )
+
+    with open(config_path, "r", encoding="utf-8") as file:
+        return json.load(file)
+
 
 if __name__ == "__main__":
+    config = read_config()
+
     collator = pyuca.Collator()
 
     school_class = choose_class()
     names = sorted(retrieve_student_names(school_class), key=collator.sort_key)
 
     for grade_file in fetch_all_grade_files():
-        grades = evaluate_grades(grade_file, names)
+        grades = evaluate_grades(grade_file, names, config=config)
         date = get_task_date(grade_file)
 
         show_grades_summary(grades, grade_file, school_class, date)
 
-        prompt_grade_input_or_continue(grades)
+        prompt_grade_input_or_continue(grades, config=config)
