@@ -27,6 +27,16 @@ Charlie Green
 ```
 5. Move the downloaded grading file to the "grades" folder
 
+### Confifuration
+Configuration is achieved via `config.json` file in the root directory. The config options are:
+
+```
+{
+    "writeOnlyPresetInGradeFile": true,  # default = True; If set to true, skips all students without marks in the grade file during the write stage
+    "gepdEndSymbol": "%"                 # default = "%"; Defines the end symbol in the GEPD mark
+}
+```
+
 ### 3. Run the grading system
 6. Run the app:
 ```cmd
