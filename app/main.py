@@ -3,6 +3,7 @@ import os
 import re
 import statistics
 from datetime import datetime
+import locale
 
 import pyautogui
 import pyuca
@@ -377,10 +378,31 @@ def read_config() -> dict:
 if __name__ == "__main__":
     config = read_config()
 
-    collator = pyuca.Collator()
+    locale_candidates = ["lv_LV.UTF-8", "lv_LV", "Latvian_Latvia.1257"]
+    used_locale = None
+    
+    for loc in locale_candidates:
+        try:
+            locale.setlocale(locale.LC_COLLATE, loc)
+            used_locale = loc
+            break
+        except locale.Error:
+            continue
+
+    try:
+        collator = pyuca.Collator()
+    except Exception:
+        collator = None
 
     school_class = choose_class()
-    names = sorted(retrieve_student_names(school_class), key=collator.sort_key)
+    names_list = retrieve_student_names(school_class)
+
+    if used_locale:
+        names = sorted(names_list, key=locale.strxfrm)
+    elif collator:
+        names = sorted(names_list, key=collator.sort_key)
+    else:
+        names = sorted(names_list, key=str.lower)
 
     for grade_file in fetch_all_grade_files():
         grades = evaluate_grades(grade_file, names, config=config)
